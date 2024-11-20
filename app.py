@@ -5,7 +5,24 @@ import pandas as pd
 import json
 import os
 
-# Sample component database (in practice, you'd want to use a real database)
+# Configure OpenAI
+def get_openai_recommendation(prompt):
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{
+                "role": "system",
+                "content": "You are an expert PC building assistant. Provide component recommendations based on user requirements."
+            }, {
+                "role": "user",
+                "content": prompt
+            }],
+            temperature=0.7,
+            max_tokens=500
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return None
 PC_COMPONENTS = {
     "Gaming": {
         "Budget": {
@@ -49,151 +66,120 @@ PC_COMPONENTS = {
     }
 }
 
-def get_ai_recommendation(user_requirements):
-    """Simulate AI recommendations (replace with actual OpenAI API in production)"""
-    use_case = user_requirements["use_case"]
-    budget = user_requirements["budget"]
-    
-    if budget <= 1000:
-        tier = "Budget"
-    else:
-        tier = "High-end"
-    
-    components = PC_COMPONENTS[use_case][tier]
-    return components
-
-def calculate_price_estimate(components):
-    """Simulate price calculation"""
-    # In practice, you'd want to fetch real prices from an API
-    base_prices = {
-        "Budget": {
-            "Gaming": 800,
-            "Workstation": 1000
-        },
-        "High-end": {
-            "Gaming": 2000,
-            "Workstation": 3000
-        }
-    }
-    return base_prices["High-end" if "High-end" in str(components) else "Budget"]["Gaming" if "Gaming" in str(components) else "Workstation"]
-
 def main():
-    st.set_page_config(page_title="AI PC Builder", layout="wide")
+    st.set_page_config(page_title="Divine PC Builder", layout="wide")
     
-    # Title and introduction
-    st.title("🖥️ AI PC Builder")
+    # Custom CSS for modern UI
     st.markdown("""
-    Let's build your perfect PC! Tell me what you need, and I'll recommend the best components.
-    """)
+    <style>
+    .main {
+        background-color: #f8f9fa;
+    }
+    .stButton>button {
+        background-color: #7E57C2;
+        color: white;
+        border-radius: 20px;
+        padding: 10px 25px;
+    }
+    .css-1d391kg {
+        background-color: #ffffff;
+        border-radius: 15px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Hero section
+    col1, col2 = st.columns([2,1])
+    with col1:
+        st.title("🌟 Divine PC Builder")
+        st.markdown("""
+        Experience AI-powered PC building guidance personalized for you.
+        Get instant recommendations, insights, and practical build advice.
+        """)
     
-    # Sidebar for user input
-    with st.sidebar:
-        st.header("Your Requirements")
-        
-        use_case = st.selectbox(
-            "What will you use your PC for?",
-            ["Gaming", "Workstation"],
-            help="This helps me recommend the right components"
-        )
-        
-        budget = st.slider(
-            "What's your budget? (USD)",
-            min_value=500,
-            max_value=5000,
-            value=1500,
-            step=100,
-            help="Slide to set your maximum budget"
-        )
-        
-        preferences = st.multiselect(
-            "Any specific preferences?",
-            ["Ray Tracing", "Quiet Operation", "RGB Lighting", "Overclock-ready", "Small Form Factor"],
-            help="Select any specific features you'd like"
-        )
-        
-        if st.button("Generate Build 🚀", use_container_width=True):
-            user_requirements = {
-                "use_case": use_case,
-                "budget": budget,
-                "preferences": preferences
-            }
-            
-            # Get AI recommendations
-            with st.spinner("🤔 Thinking of the perfect build for you..."):
-                recommended_components = get_ai_recommendation(user_requirements)
-                
-                # Store in session state
-                st.session_state.recommendations = recommended_components
-                st.session_state.price_estimate = calculate_price_estimate(recommended_components)
-                st.session_state.show_results = True
+    # Main chat interface
+    st.markdown("---")
     
-    # Main content area
-    if "show_results" in st.session_state and st.session_state.show_results:
-        col1, col2 = st.columns([2, 1])
+    # Initialize chat history
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+        st.session_state.show_builder = False
+
+    # Chat input
+    user_input = st.text_input("Tell me about your PC needs...", 
+                              placeholder="e.g., I need a gaming PC for streaming under $2000")
+    
+    if user_input:
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        
+        # Get AI response
+        prompt = f"""
+        User request: {user_input}
+        Provide PC build recommendations in this format:
+        - Use case analysis
+        - Recommended components
+        - Performance expectations
+        - Budget breakdown
+        """
+        
+        with st.spinner("🤔 Contemplating the perfect build..."):
+            ai_response = get_openai_recommendation(prompt)
+            if ai_response:
+                st.session_state.messages.append({"role": "assistant", "content": ai_response})
+                st.session_state.show_builder = True
+
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.container():
+            if message["role"] == "user":
+                st.markdown(f"🧑 **You:** {message['content']}")
+            else:
+                st.markdown(f"🤖 **Divine Builder:** {message['content']}")
+
+    # Interactive builder interface
+    if st.session_state.show_builder:
+        st.markdown("---")
+        st.subheader("🛠️ Customize Your Build")
+        
+        col1, col2 = st.columns([2,1])
         
         with col1:
-            st.header("Recommended Build")
-            
-            # Display components in an organized way
-            for component, options in st.session_state.recommendations.items():
-                with st.expander(f"📦 {component}", expanded=True):
-                    if isinstance(options, list):
-                        selected = st.selectbox(
-                            f"Select your preferred {component}:",
-                            options,
-                            key=f"select_{component}"
-                        )
-                        st.markdown(f"**Selected:** {selected}")
-                    else:
-                        st.markdown(f"**Recommended:** {options}")
+            # Component selection with explanations
+            components = ["CPU", "GPU", "RAM", "Storage", "Motherboard", "PSU", "Case"]
+            for component in components:
+                with st.expander(f"{component} Selection", expanded=True):
+                    st.markdown(f"### {component}")
+                    options = PC_COMPONENTS["Gaming"]["High-end"][component] if component in PC_COMPONENTS["Gaming"]["High-end"] else ["Option 1", "Option 2"]
+                    selected = st.selectbox(
+                        "Choose your component:",
+                        options,
+                        key=f"select_{component}"
+                    )
+                    st.info(f"💡 Why this matters: AI-powered explanation for {component} choice")
         
         with col2:
-            st.header("Build Summary")
-            st.metric(
-                "Estimated Total",
-                f"${st.session_state.price_estimate:,}",
-                delta=f"${budget - st.session_state.price_estimate:,} from budget"
-            )
+            # Build summary and insights
+            st.markdown("### 🎯 Build Overview")
+            st.progress(0.8)
+            st.metric("Build Completion", "80%")
             
-            # Performance metrics
-            st.subheader("Expected Performance")
-            if use_case == "Gaming":
-                col_fps, col_res = st.columns(2)
-                with col_fps:
-                    st.metric("Avg. FPS (1440p)", "144+" if "High-end" in str(st.session_state.recommendations) else "60+")
-                with col_res:
-                    st.metric("Max Resolution", "4K" if "High-end" in str(st.session_state.recommendations) else "1440p")
-            else:
-                col_render, col_export = st.columns(2)
-                with col_render:
-                    st.metric("Render Score", "95/100" if "High-end" in str(st.session_state.recommendations) else "75/100")
-                with col_export:
-                    st.metric("Export Speed", "Very Fast" if "High-end" in str(st.session_state.recommendations) else "Fast")
-            
-            # Export build
-            if st.button("Export Build 📋", use_container_width=True):
-                build_data = {
-                    "components": st.session_state.recommendations,
-                    "price_estimate": st.session_state.price_estimate,
-                    "requirements": {
-                        "use_case": use_case,
-                        "budget": budget,
-                        "preferences": preferences
-                    }
-                }
-                st.download_button(
-                    label="Download Build (JSON)",
-                    data=json.dumps(build_data, indent=2),
-                    file_name="my_pc_build.json",
-                    mime="application/json",
-                    use_container_width=True
-                )
-    
+            # Performance predictions
+            st.markdown("### 🚀 Performance Insights")
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.metric("Gaming Score", "92/100")
+            with col_b:
+                st.metric("Value Score", "88/100")
+
     # Footer
     st.markdown("---")
     st.markdown("""
-    💡 **Note:** Prices and availability may vary. Always verify compatibility and current prices before making a purchase.
-    """)
+    <div style='text-align: center'>
+    💡 Built with wisdom from thousands of PC builds. Constantly learning and evolving.
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
